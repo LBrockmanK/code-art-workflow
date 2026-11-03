@@ -1,0 +1,30 @@
+---
+name: code-video
+description: "Use when making a short video from Remotion, Canvas or Three code, not a video model: title card, motion graphic, loop or transparent overlay, with contact-sheet critique, encode presets and clip checks."
+---
+
+# Code video
+
+Make a short video by writing animation code that a headless browser renders to frames and ffmpeg encodes. It suits typography, flat UI, diagrams, HUDs, procedural effects and seamless loops. It does not draw illustrative things (a map, a ship, a face); for those, place a still made by `fleet:codex-imagegen` (step 9). No video-generating model is used. Sound is untested here: version 1 carries no audio step, and a later item adds audio.
+
+`${CLAUDE_PLUGIN_ROOT}` below is this plugin's folder. Tool details, commands and snippets are in [reference.md](reference.md).
+
+## Setup
+
+1. Prerequisites: Node 24, `ffmpeg` and `ffprobe` and `resvg` on PATH, Python 3 with `fonttools` and `pillow`. Check with `ffmpeg -version`.
+2. Remotion licence: Remotion is free for individuals, evaluation, and companies of up to three employees. Any commercial use by a larger company needs a paid licence, checked before that use. State this to the human when Remotion is chosen.
+3. Start the piece as a Remotion project: run `npx create-video@4.0.540 --blank --yes <piece>`. Then rewrite every `remotion` and `@remotion/*` entry of the new `package.json` to `4.0.540` (the scaffolder writes npm's latest version whatever it runs at), add `playwright` and `sharp`, and run `npm install` in the piece. A project that does not start at 4.0.540 after the rewrite is routed up, not patched. Install the plain renderer's browser with `npx playwright install chromium`. Details: reference.md, "Piece setup".
+4. Output policy (binding on every tool of this plugin): each tool run writes into a fresh folder `out/<tool>-<YYYYMMDD-HHMMSS>/` under the piece and refuses to start when that folder exists. No tool deletes or empties a file or folder, every ffmpeg call carries `-n` (never overwrite), and a tool given an explicit output path refuses when the path exists. Never remove a refusal by deleting the old output; wait one second or give a new path.
+
+## Steps
+
+1. Write the shot list first: one paragraph per clip with the beats in seconds and the end state.
+2. Time scenes from their content, not from fixed slots. Give each scene the time its content needs (reading time for its text, the length of its motion, a hold at the end) and freeze the shot list only after that. Record the render budget: a heavy piece costs about 4.6 seconds of render per video second.
+3. Pick the stack. Text, UI and layout stay in Remotion's React and CSS. Canvas and Three.js scenes are written as plain modules driven by `frame(t)`, so they also run under the plain renderer, which ships here as the fallback (`render-frames.mjs`, page contract in reference.md). Use the raw canvas as the default, `<ThreeCanvas>` only for a new declarative scene, and `--gl swangle` when the machine has no graphics card. Load a font by copying the TTF it needs from `${CLAUDE_PLUGIN_ROOT}/fonts/<family>/` into the piece's `public/fonts` and declaring it in CSS.
+4. Build deterministically. Every frame is a function of time alone: no wall clock, no `Math.random()` (use a seeded generator), loops of whole cycles per loop. All editable text lives in one props object, with a `textBlocks` list (`[{ id, x, y, w, h }]`, pixels of the full frame) beside it.
+5. Critique loop. Render stills at the beats, including mid-transition times, as a contact sheet, plus full-size crops of every text block: `node ${CLAUDE_PLUGIN_ROOT}/scripts/remotion-stills.mjs <entry.jsx> <CompositionId> --times 0,1.5,3 --props props.json`, or `node ${CLAUDE_PLUGIN_ROOT}/scripts/render-frames.mjs <page.html> --stills 0,1.5,3 --sheet --props props.json` for a plain-browser piece. Read the sheet and every crop. Name one or two concrete defects (overlaps, tangents, unreadable text, effects pushed too far), fix them, and repeat. Expect 2 to 6 rounds.
+6. Render the clip (`npx remotion render`, or `render-frames.mjs` without `--stills`; add `--alpha` for a transparent overlay).
+7. Encode with the presets: `node ${CLAUDE_PLUGIN_ROOT}/scripts/encode.mjs <clip> --target h264` or `--target webm-alpha`. H.264 for viewing runs at CRF 20 up to about 21 seconds and CRF 23 past that. When the first file exceeds 10 MB at a CRF below 23, the tool writes one second pass at CRF 23 beside it (`-crf23`), keeps both and prints both sizes; never a third pass. Transparent overlays use VP9 WebM. Dark gradients get static grain (recipe in reference.md), never per-frame grain, which is nearly incompressible.
+8. Check the encoded clip: `node ${CLAUDE_PLUGIN_ROOT}/scripts/check-clip.mjs <encoded clip> all`. It writes a contact sheet (read it for dead gaps and encoding faults), the loop verdict, and for dark scenes a banding sheet with the levels crushed four times (read it for visible steps). The loop verdict prints `pass` when the seam PSNR (last frame against first) is at least the lowest of the eight adjacent-frame PSNRs minus 3 dB, else `fail`: the last frame of a loop precedes the first by one ordinary step, so the seam must look like one ordinary step, not like a repeat of the first frame. A clip that is not meant to loop is expected to fail it.
+9. Still assets (optional). A figure the code cannot draw is generated with `fleet:codex-imagegen` by one of two prompt routes, written in that skill's schema, and placed as an image in the piece. Composite route (the default): a painted image on a plain background, no frame, no text. Trace route (where real vectors are needed): a pure black-and-white image with no grey wash, plain background, no frame, no text, then thresholded and traced as in `code-art-workflow:code-svg`. Prompt examples: reference.md, "Figure prompts".
+10. A human watches the clip at speed before it is used. The model never watches at speed; pacing and easing are judged by the human. Say so in the report and do not call the clip final before that.
