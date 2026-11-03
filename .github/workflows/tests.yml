@@ -1,0 +1,61 @@
+name: tests
+
+# windows-latest matches the fleet's primary platform.
+on:
+  push:
+  pull_request:
+
+jobs:
+  skill-lint:
+    # doodle-lint over this repo's skills, mirroring the fleet and scraibe jobs. Strict:
+    # warnings fail the build. Version pinned: a gate must not change rules on PyPI's schedule,
+    # so upgrade deliberately. Run from the repo root: doodle finds .doodle.toml by walking up
+    # from the working directory, not from the linted files.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install doodle-lint==1.0.0
+      - run: doodle --strict skills
+
+  python-tests:
+    # The helpers: oklch palette and contrast, text outlining, threshold and trace.
+    # potrace is not installed here, so the trace test asserts the plain absent-potrace message.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest fonttools pillow
+      - run: python -m pytest tests/python -q
+
+  node-tests:
+    # The Node tools drive ffmpeg, resvg and browsers. The binaries are the same release assets
+    # fleet's machine tools install, fetched directly so CI depends on no third-party action.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install ffmpeg and ffprobe
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-n8.1-latest-win64-gpl-8.1.zip' -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\ffmpeg.zip" -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
+          $bin = (Get-ChildItem -Path "$env:RUNNER_TEMP\ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1).DirectoryName
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
+      - name: Install resvg
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/linebender/resvg/releases/latest/download/resvg-win-x86_64.zip' -OutFile "$env:RUNNER_TEMP\resvg.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\resvg.zip" -DestinationPath "$env:RUNNER_TEMP\resvg"
+          $bin = (Get-ChildItem -Path "$env:RUNNER_TEMP\resvg" -Recurse -Filter resvg.exe | Select-Object -First 1).DirectoryName
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
+      - run: npm ci --prefix tests/node
+      - run: npx --prefix tests/node playwright install chromium
+      # Node 22 and later read the argument as a glob, not a folder, so the pattern names the files.
+      - run: node --test "tests/node/*.test.mjs"
