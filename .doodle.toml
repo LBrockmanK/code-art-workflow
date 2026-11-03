@@ -1,0 +1,19 @@
+# doodle-lint config for the code-art-workflow plugin.
+#
+# Same rule set as the sibling plugins (research-workflow, debugging-workflow), under the same
+# pinned doodle version: fm/unknown-field is off (see the fleet repo's skill-lint-coverage.md:
+# https://github.com/LBrockmanK/fleet/blob/master/skill-lint-coverage.md).
+[severity]
+"fm/unknown-field" = "off"
+
+# Project vocabulary the desc/typo spellcheck must not flag. Case-insensitive.
+[spelling]
+allow = ["scraibe", "repos", "lookup",
+         # tools and formats the two skills name
+         "remotion", "potrace", "resvg", "librsvg", "oklch", "ffmpeg", "ffprobe",
+         "playwright", "chromium", "psnr", "svg", "webm", "vp9", "crf", "h264",
+         "threejs", "canvas", "otsu", "fonttools", "sharp", "codex", "imagegen",
+         "swangle", "swiftshader", "wcag", "ttf", "ofl", "mp4", "png", "mjs",
+         # font families the plugin ships
+         "cinzel", "lora", "oswald", "orbitron", "rajdhani", "rye", "inter",
+         "medievalsharp", "unifraktur", "maguntia", "pirata", "fell", "sharetechmono"]
