@@ -1,0 +1,10 @@
+{
+  "name": "code-art-workflow-node-tests",
+  "private": true,
+  "type": "module",
+  "description": "Installs what the plugin's Node tools resolve from a piece project, so the tests run them as a piece would.",
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "sharp": "^0.34.5"
+  }
+}

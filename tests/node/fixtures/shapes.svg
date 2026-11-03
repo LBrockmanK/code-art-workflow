@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" width="120" height="80">
+  <!-- Test fixture for the parity tool: shapes only, no text. -->
+  <rect width="120" height="80" fill="#f4efe6"/>
+  <circle cx="40" cy="40" r="26" fill="#b5483a"/>
+  <rect x="62" y="18" width="40" height="44" rx="4" fill="#2f5d62"/>
+  <path d="M10 70 L60 60 L110 70" fill="none" stroke="#222" stroke-width="3"/>
+</svg>
