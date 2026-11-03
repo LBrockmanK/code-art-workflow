@@ -8,7 +8,7 @@ Run from the folder that will hold the piece (`<piece>` is a new folder name):
 npx create-video@4.0.540 --blank --yes <piece>
 ```
 
-Edit `<piece>/package.json`: set `remotion`, `@remotion/cli`, `@remotion/bundler`, `@remotion/renderer` (and any other `@remotion/*`) to `4.0.540`, and add `playwright` and `sharp` as dependencies. Then, in the piece:
+The scaffolder runs `npm install` itself. Edit `<piece>/package.json`: set `remotion`, `@remotion/cli`, `@remotion/bundler`, `@remotion/renderer` (and any other `@remotion/*`) to `4.0.540`, and add `playwright` and `sharp` as dependencies. Then, in the piece:
 
 ```
 npm install
