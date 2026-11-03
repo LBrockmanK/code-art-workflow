@@ -39,15 +39,24 @@ function renderResvg(file, out, width, fontsDir) {
 }
 
 async function renderLibrsvg(sharp, file, out, width) {
-  const svg = fs.readFileSync(file);
+  // A file path (not a buffer) lets librsvg resolve images linked beside the SVG.
   // density 96 maps one user unit to one pixel; resize then fixes the width.
-  await sharp(svg, { density: 96 }).resize({ width }).flatten({ background: '#ffffff' }).png().toFile(out);
+  await sharp(path.resolve(file), { density: 96 }).resize({ width }).flatten({ background: '#ffffff' }).png().toFile(out);
 }
 
-async function renderChromium(browser, svgText, out, width, height, time) {
+async function renderChromium(browser, svgText, out, width, height, time, baseDir) {
   const page = await browser.newPage({ viewport: { width, height } });
   const body = svgText.replace(/<\?xml[^>]*>/, '').replace(/<svg /, `<svg style="display:block;width:${width}px;height:${height}px" `);
-  await page.setContent(`<html><body style="margin:0;background:#fff">${body}</body></html>`);
+  // The page is served from a virtual origin whose files are the SVG's own folder, so images linked beside the SVG load.
+  const origin = 'http://svg.local';
+  await page.route(`${origin}/**`, async (route) => {
+    const p = decodeURIComponent(new URL(route.request().url()).pathname);
+    if (p === '/__page.html') return route.fulfill({ contentType: 'text/html', body: `<html><body style="margin:0;background:#fff">${body}</body></html>` });
+    const file = path.join(baseDir, p);
+    if (!file.startsWith(baseDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
+    return route.fulfill({ body: fs.readFileSync(file) });
+  });
+  await page.goto(`${origin}/__page.html`);
   await page.evaluate(() => document.fonts.ready);
   if (time !== undefined) {
     await page.evaluate((t) => {
@@ -88,7 +97,7 @@ async function main() {
       const png = (r) => path.join(runDir, `${name}.${r}.png`);
       if (wanted.includes('resvg')) renderResvg(path.resolve(file), png('resvg'), width, fontsDir);
       if (wanted.includes('librsvg')) await renderLibrsvg(sharp, file, png('librsvg'), width);
-      if (wanted.includes('chromium')) await renderChromium(browser, svgText, png('chromium'), width, height, time);
+      if (wanted.includes('chromium')) await renderChromium(browser, svgText, png('chromium'), width, height, time, path.dirname(path.resolve(file)));
       const px = {};
       for (const r of wanted) px[r] = await rawPixels(sharp, png(r));
       const score = (a, b) => {
