@@ -1,0 +1,7 @@
+{
+  "name": "code-art-workflow",
+  "description": "Makes short videos and vector drawings by having an AI write code: a video skill (Remotion, with a plain-browser renderer as fallback) and an SVG skill, on shared tools for rendering, encoding, checking clips, parity of SVG renderers, palettes, outlined text and tracing. Figure steps use fleet:codex-imagegen where the fleet plugin is installed; without fleet, a piece supplies its figures another way.",
+  "author": { "name": "Kevin Brockman" },
+  "license": "MIT",
+  "keywords": ["video", "svg", "remotion", "ffmpeg", "resvg", "code-art", "generative"]
+}

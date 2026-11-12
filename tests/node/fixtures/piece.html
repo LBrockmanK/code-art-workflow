@@ -1,0 +1,17 @@
+<!doctype html>
+<html><body style="margin:0;background:#000">
+<canvas id="c" width="160" height="90"></canvas>
+<script>
+  // Test fixture for the frame renderer: a block whose position is a pure function of t.
+  const c = document.getElementById('c');
+  const g = c.getContext('2d');
+  window.piece = {
+    width: 160, height: 90, fps: 10, duration: 1,
+    async setup() {},
+    frame(t) {
+      g.fillStyle = '#102030'; g.fillRect(0, 0, 160, 90);
+      g.fillStyle = '#fff'; g.fillRect(10 + t * 100, 30, 30, 30);
+    },
+  };
+</script>
+</body></html>
