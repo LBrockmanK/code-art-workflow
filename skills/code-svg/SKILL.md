@@ -11,7 +11,7 @@ Make a vector drawing by writing a small script that emits SVG, rendering it, lo
 
 ## Setup
 
-1. Prerequisites: Node 24, `resvg` on PATH, Python 3 with `fonttools` and `pillow`, and a piece folder with `sharp` and `playwright` installed (`npm install sharp playwright` and `npx playwright install chromium`). `potrace` is optional, only for the trace route of step 6.
+1. Prerequisites: Node 24, `resvg` on PATH, Python 3 with `fonttools` and `pillow`, and a piece folder with `sharp` and `playwright` installed (`npm install sharp playwright` and `npx playwright install chromium`). `potrace` is optional, only for the trace route of step 6; install it by hand: the Windows zip `potrace-1.16.win64.zip` from https://potrace.sourceforge.net/#downloading, with `potrace.exe` put on PATH.
 2. Output policy (binding on every tool of this plugin): each tool run writes into a fresh folder `out/<tool>-<YYYYMMDD-HHMMSS>/` and refuses to start when that folder exists. No tool deletes or empties a file or folder, and a tool given an explicit output path refuses when the path exists. Do not delete an old run to get past a refusal; wait one second or give a new path.
 3. Remotion is not used here. If the drawing is later animated as video, use `code-art-workflow:code-video`, which states the Remotion licence condition (free for individuals, evaluation and companies of up to three employees; a paid licence for any larger company before commercial use).
 

@@ -26,7 +26,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageOps
 
 POTRACE_ABSENT = ("potrace is not installed; the mask was written but the trace step is skipped. "
-                  "Install potrace 1.16 (https://potrace.sourceforge.net/) and put it on PATH, then run again.")
+                  "Optional manual install: download the Windows zip potrace-1.16.win64.zip from "
+                  "https://potrace.sourceforge.net/#downloading and put potrace.exe on PATH, then run again.")
 
 
 def parse_crop(text):

@@ -13,7 +13,7 @@ The plugin ships no templates: no starter project, no sample piece, no token bui
 - Node 24 and Python 3.
 - `ffmpeg` and `ffprobe` (the GPL build of the 8.1 release line, with libx264 and libvpx) and `resvg` on PATH. The fleet plugin installs these from GitHub releases when it is installed; otherwise download them yourself.
 - Python packages for the helpers: `fonttools` and `pillow`.
-- Optional: `potrace` (1.16) on PATH, only for the trace route of the SVG skill. The helper says so plainly when it is absent. potrace is called, never bundled.
+- Optional: `potrace` 1.16, only for the trace route of the SVG skill; install it by hand: the Windows zip `potrace-1.16.win64.zip` from https://potrace.sourceforge.net/#downloading, with `potrace.exe` put on PATH. The helper says so plainly when it is absent. potrace is called, never bundled.
 - Each piece project installs the npm packages the Node tools resolve from it (the tools hold no `node_modules`): `remotion`, `@remotion/cli`, `@remotion/bundler`, `@remotion/renderer` (all at 4.0.540), `playwright` and `sharp`. Playwright's Chromium comes from `npx playwright install chromium` run in the piece.
 - Figure steps use `fleet:codex-imagegen` where the fleet plugin is installed (a soft dependency). Without fleet, a piece supplies its figures another way.
 
