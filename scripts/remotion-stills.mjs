@@ -38,14 +38,14 @@ async function main() {
     ...(process.env.CHROME_SHELL ? { browserExecutable: process.env.CHROME_SHELL } : {}),
     chromiumOptions: gl ? { gl } : {},
   });
-  const composition = await selectComposition({ serveUrl, id, inputProps, puppeteerInstance: browser });
   const files = [];
   try {
+    const composition = await selectComposition({ serveUrl, id, inputProps, puppeteerInstance: browser });
     for (const [i, t] of times.entries()) {
       const output = path.join(runDir, `${String(i).padStart(2, '0')}.png`);
       await renderStill({ composition, serveUrl, output, frame: Math.round(t * composition.fps), inputProps, puppeteerInstance: browser });
       files.push(output);
-      if (textBlocks.length) await cropTextBlocks(output, textBlocks, runDir, `t${t.toFixed(2).padStart(6, '0')}`);
+      if (textBlocks.length) await cropTextBlocks(output, textBlocks, runDir, `${String(i).padStart(2, '0')}-t${t.toFixed(2).padStart(6, '0')}`);
     }
   } finally {
     await browser.close({ silent: true });

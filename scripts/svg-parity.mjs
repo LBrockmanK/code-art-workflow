@@ -18,12 +18,25 @@ import { rmse } from './lib/rmse.mjs';
 
 const FONTS_DEFAULT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'fonts');
 
+// The root <svg ...> tag, read with a small attribute scanner that accepts single or double
+// quotes and any whitespace (a newline after the tag name included).
+function rootAttributes(svg) {
+  const tag = /<svg(?=[\s>/])((?:"[^"]*"|'[^']*'|[^>"'])*)>/.exec(svg);
+  if (!tag) throw new Error('no <svg> root element found');
+  const attrs = {};
+  for (const m of tag[1].matchAll(/([^\s=/"']+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs[m[1]] = m[2] ?? m[3];
+  return attrs;
+}
+
+const NUMBER = /^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*(?:px)?\s*$/;
+
 function viewBoxOf(svg) {
-  const m = /viewBox="([\d.\s,-]+)"/.exec(svg);
-  if (m) { const v = m[1].trim().split(/[\s,]+/).map(Number); return { w: v[2], h: v[3] }; }
-  const w = /<svg[^>]*\swidth="([\d.]+)/.exec(svg);
-  const h = /<svg[^>]*\sheight="([\d.]+)/.exec(svg);
-  if (w && h) return { w: Number(w[1]), h: Number(h[1]) };
+  const attrs = rootAttributes(svg);
+  if (attrs.viewBox !== undefined) {
+    const v = attrs.viewBox.trim().split(/[\s,]+/).map(Number);
+    if (v.length === 4 && v.every(Number.isFinite) && v[2] > 0 && v[3] > 0) return { w: v[2], h: v[3] };
+  }
+  if (NUMBER.test(attrs.width ?? '') && NUMBER.test(attrs.height ?? '')) return { w: parseFloat(attrs.width), h: parseFloat(attrs.height) };
   throw new Error('the SVG needs a viewBox (or width and height) so the renderers can agree on a size');
 }
 
@@ -45,15 +58,25 @@ async function renderLibrsvg(sharp, file, out, width) {
 }
 
 async function renderChromium(browser, svgText, out, width, height, time, baseDir) {
-  const page = await browser.newPage({ viewport: { width, height } });
-  const body = svgText.replace(/<\?xml[^>]*>/, '').replace(/<svg /, `<svg style="display:block;width:${width}px;height:${height}px" `);
+  // The SVG is untrusted input: scripts are off, and only the SVG's own folder is served.
+  // Nothing else is reachable: every request outside the virtual origin is aborted.
+  const context = await browser.newContext({ viewport: { width, height }, javaScriptEnabled: false });
+  const page = await context.newPage();
+  // The size comes from a page rule (important beats any style attribute on the root), so the SVG text is not rewritten.
+  const body = svgText.replace(/<\?xml[^>]*\?>/, '').replace(/<!DOCTYPE[^>[]*(\[[^\]]*\])?[^>]*>/i, '');
+  const html = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'">` +
+    `<style>body{margin:0;background:#fff}body>svg{display:block!important;width:${width}px!important;height:${height}px!important}</style></head><body>${body}</body></html>`;
   // The page is served from a virtual origin whose files are the SVG's own folder, so images linked beside the SVG load.
   const origin = 'http://svg.local';
-  await page.route(`${origin}/**`, async (route) => {
-    const p = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (p === '/__page.html') return route.fulfill({ contentType: 'text/html', body: `<html><body style="margin:0;background:#fff">${body}</body></html>` });
-    const file = path.join(baseDir, p);
-    if (!file.startsWith(baseDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
+  const root = path.resolve(baseDir);
+  await context.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin !== origin) return route.abort();
+    const p = decodeURIComponent(url.pathname);
+    if (p === '/__page.html') return route.fulfill({ contentType: 'text/html', body: html });
+    const file = path.resolve(root, '.' + p);
+    const inside = file.startsWith(root + path.sep);
+    if (!inside || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
     return route.fulfill({ body: fs.readFileSync(file) });
   });
   await page.goto(`${origin}/__page.html`);
@@ -67,7 +90,7 @@ async function renderChromium(browser, svgText, out, width, height, time, baseDi
     await page.waitForTimeout(50);
   }
   await page.screenshot({ path: out });
-  await page.close();
+  await context.close();
 }
 
 async function rawPixels(sharp, file) {
@@ -83,6 +106,12 @@ async function main() {
   const wanted = String(opts.renderers || 'resvg,librsvg,chromium').split(',');
   const time = opts.time === undefined ? undefined : Number(opts.time);
   for (const f of positional) if (!fs.existsSync(f)) throw new Error(`no such file: ${f}`);
+  const names = new Map();
+  for (const f of positional) {
+    const n = path.basename(f, path.extname(f));
+    if (names.has(n)) throw new Error(`refusing to start: ${names.get(n)} and ${f} have the same file name "${n}"; their renders would overwrite each other. Run them one at a time or rename one.`);
+    names.set(n, f);
+  }
   const runDir = createRunFolder('svg-parity', opts['out-root'] || path.resolve('out'));
   const sharp = await loadFromPiece('sharp');
   const browser = wanted.includes('chromium') ? await (await loadFromPiece('playwright')).chromium.launch(

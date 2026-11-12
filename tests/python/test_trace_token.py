@@ -83,3 +83,29 @@ def test_the_framing_sheet_reports_margins_against_the_intended_box(tmp_path):
     assert info["ink_bbox"] == (40, 60, 120, 100)
     assert info["margins"] == {"left": 40, "top": 60, "right": 80, "bottom": 100}
     assert sheet.is_file()
+
+
+def test_an_unsafe_run_stamp_is_refused_and_nothing_is_created(tmp_path):
+    import os
+    src = tmp_path / "token.png"
+    Image.new("L", (20, 20), 255).save(src)
+    out = tmp_path / "out"
+    env = {**os.environ, "CODE_ART_RUN_STAMP": "x/../../../escape"}
+    r = subprocess.run([sys.executable, str(SCRIPT), str(src), "--out-root", str(out)], capture_output=True, text=True, env=env)
+    assert r.returncode != 0
+    assert "CODE_ART_RUN_STAMP" in r.stderr
+    assert not (tmp_path / "escape").exists()
+
+
+@pytest.mark.skipif(not shutil.which("resvg"), reason="resvg is not on PATH")
+def test_the_framing_render_stays_beside_the_sheet_and_is_never_deleted(tmp_path):
+    svg = tmp_path / "t.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+                   '<rect x="20" y="30" width="40" height="20" fill="#000"/></svg>')
+    sheet = tmp_path / "framing.png"
+    trace_token.framing_sheet(svg, (200, 200), sheet)
+    assert sorted(p.name for p in tmp_path.iterdir() if p.suffix == ".png") == ["framing.png", "framing.render.png"]
+    (tmp_path / "again.render.png").write_bytes(b"keep")
+    with pytest.raises(FileExistsError):
+        trace_token.framing_sheet(svg, (200, 200), tmp_path / "again.png")  # an existing render is refused, not overwritten
+    assert (tmp_path / "again.render.png").read_bytes() == b"keep"

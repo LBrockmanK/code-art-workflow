@@ -27,13 +27,23 @@ export function refuseIfExists(target) {
   if (fs.existsSync(target)) throw new RefusalError(refusal(target));
 }
 
+/** The override must be a plain token (letters, digits, - and _) so the run stays under the output folder. */
+function runStamp(now) {
+  const o = process.env.CODE_ART_RUN_STAMP;
+  if (!o) return stamp(now);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(o)) {
+    throw new RefusalError('refusing to start: CODE_ART_RUN_STAMP must be letters, digits, - and _ only (for example 20261102-090507)');
+  }
+  return o;
+}
+
 /**
  * Creates <outRoot>/<tool>-<stamp>/ and returns its path. The leaf folder is created
  * without `recursive`, so an existing folder is an error, never a reuse.
  * CODE_ART_RUN_STAMP fixes the stamp (a hook for tests and for replaying a run name).
  */
 export function createRunFolder(tool, outRoot, { now = new Date() } = {}) {
-  const dir = path.resolve(outRoot, `${tool}-${process.env.CODE_ART_RUN_STAMP || stamp(now)}`);
+  const dir = path.resolve(outRoot, `${tool}-${runStamp(now)}`);
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   try {
     fs.mkdirSync(dir);

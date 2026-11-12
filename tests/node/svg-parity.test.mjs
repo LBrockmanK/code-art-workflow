@@ -40,3 +40,56 @@ test('the parity tool renders one fixture SVG through resvg, librsvg (sharp) and
   assert.ok(resvgVsLibrsvg >= 0 && resvgVsLibrsvg < 0.08, `resvg vs librsvg ${resvgVsLibrsvg}`);
   assert.ok(resvgVsChromium >= 0 && resvgVsChromium < 0.08, `resvg vs chromium ${resvgVsChromium}`);
 });
+
+test('two SVG inputs with the same file name are refused before anything is rendered', async () => {
+  const dir = tmpDir();
+  fs.mkdirSync(path.join(dir, 'a')); fs.mkdirSync(path.join(dir, 'b'));
+  fs.copyFileSync(SVG, path.join(dir, 'a', 'piece.svg'));
+  fs.copyFileSync(SVG, path.join(dir, 'b', 'piece.svg'));
+  const out = path.join(dir, 'out');
+  const r = await runScript('svg-parity.mjs', [path.join(dir, 'a', 'piece.svg'), path.join(dir, 'b', 'piece.svg'), '--out-root', out]);
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /same file name/);
+  assert.ok(!fs.existsSync(out), 'no run folder is made');
+});
+
+test('valid SVG roots (single quotes, exponent numbers, a newline after the tag name) render at one size', async () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'odd.svg'),
+    "<?xml version='1.0'?>\n<svg\n  xmlns='http://www.w3.org/2000/svg'\n  viewBox='0 0 1e2 5e1' style='background:#eee'>\n" +
+    "<rect width='1e2' height='5e1' fill='#fff'/><circle cx='50' cy='25' r='1.5e1' fill='#c03020'/></svg>");
+  const out = path.join(dir, 'out');
+  const r = await runScript('svg-parity.mjs', [path.join(dir, 'odd.svg'), '--width', '200', '--out-root', out]);
+  assert.equal(r.code, 0, r.stdout + r.stderr);
+  const [run] = fs.readdirSync(out);
+  const cols = fs.readFileSync(path.join(out, run, 'scores.tsv'), 'utf8').trim().split('\n')[1].split('\t');
+  for (const c of cols.slice(1)) assert.ok(Number(c) < 0.08, `score ${c} in ${cols}`);
+});
+
+test('a script inside an SVG does not run in the Chromium render and nothing leaves the machine', async () => {
+  const { default: sharp } = await import('sharp');
+  const { createServer } = await import('node:http');
+  let hits = 0;
+  const server = createServer((req, res) => { hits++; res.writeHead(200).end('x'); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'secret.env'), 'TOKEN=abc');
+  fs.writeFileSync(path.join(dir, 'active.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="r" width="100" height="100" fill="#fff"/>' +
+    '<image href="http://127.0.0.1:' + port + '/img.png" width="10" height="10"/>' +
+    `<script>document.getElementById('r').setAttribute('fill','#ff0000');` +
+    `fetch('http://127.0.0.1:${port}/leak');</script></svg>`);
+  const out = path.join(dir, 'out');
+  try {
+    const r = await runScript('svg-parity.mjs', [path.join(dir, 'active.svg'), '--width', '100', '--out-root', out]);
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    const [run] = fs.readdirSync(out);
+    const { data } = await sharp(path.join(out, run, 'active.chromium.png')).raw().toBuffer({ resolveWithObject: true });
+    const o = (50 * 100 + 50) * data.length / 10000; // a pixel in the middle
+    assert.ok(data[o + 1] > 200, `the rect stayed white, got green channel ${data[o + 1]}`);
+    assert.equal(hits, 0, 'no request reached the outside server');
+  } finally {
+    server.close();
+  }
+});

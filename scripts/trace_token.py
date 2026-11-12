@@ -16,10 +16,10 @@ stamp); the run refuses when that folder exists; nothing is deleted or overwritt
 """
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -97,29 +97,34 @@ def framing_sheet(svg, use_size, out):
     if out.exists():
         raise FileExistsError(f"refusing to write: {out} already exists")
     w, h = use_size
-    with tempfile.TemporaryDirectory() as tmp:
-        render = Path(tmp) / "render.png"
-        _resvg(svg, render, w, h)
-        img = Image.open(render).convert("RGB")
-        bbox = ink_bbox(img.convert("L").point(lambda v: 0 if v < 250 else 255))
-        if bbox is None:
-            raise RuntimeError("the traced path drew nothing at the use size")
-        l, t, r, b = bbox
-        margins = {"left": l, "top": t, "right": w - r, "bottom": h - b}
-        pad = 24
-        sheet = Image.new("RGB", (w + 2 * pad, h + 2 * pad + 18), "#dddddd")
-        sheet.paste(img, (pad, pad))
-        d = ImageDraw.Draw(sheet)
-        d.rectangle((pad - 1, pad - 1, pad + w, pad + h), outline="#2060d0")  # intended box
-        d.rectangle((pad + l, pad + t, pad + r - 1, pad + b - 1), outline="#d02020")  # path bounding box
-        d.text((pad, pad + h + 6), "margins px  left %d  top %d  right %d  bottom %d   (blue: intended box, red: path)"
-               % (margins["left"], margins["top"], margins["right"], margins["bottom"]), fill="#000000")
-        sheet.save(out)
+    # The render is kept beside the sheet (in the fresh run folder): the tools delete nothing.
+    render = out.with_name(out.stem + ".render.png")
+    if render.exists():
+        raise FileExistsError(f"refusing to write: {render} already exists")
+    _resvg(svg, render, w, h)
+    img = Image.open(render).convert("RGB")
+    bbox = ink_bbox(img.convert("L").point(lambda v: 0 if v < 250 else 255))
+    if bbox is None:
+        raise RuntimeError("the traced path drew nothing at the use size")
+    l, t, r, b = bbox
+    margins = {"left": l, "top": t, "right": w - r, "bottom": h - b}
+    pad = 24
+    sheet = Image.new("RGB", (w + 2 * pad, h + 2 * pad + 18), "#dddddd")
+    sheet.paste(img, (pad, pad))
+    d = ImageDraw.Draw(sheet)
+    d.rectangle((pad - 1, pad - 1, pad + w, pad + h), outline="#2060d0")  # intended box
+    d.rectangle((pad + l, pad + t, pad + r - 1, pad + b - 1), outline="#d02020")  # path bounding box
+    d.text((pad, pad + h + 6), "margins px  left %d  top %d  right %d  bottom %d   (blue: intended box, red: path)"
+           % (margins["left"], margins["top"], margins["right"], margins["bottom"]), fill="#000000")
+    sheet.save(out)
     return {"ink_bbox": bbox, "margins": margins}
 
 
 def create_run_folder(tool, out_root):
     stamp = os.environ.get("CODE_ART_RUN_STAMP") or time.strftime("%Y%m%d-%H%M%S")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", stamp):
+        raise SystemExit("refusing to start: CODE_ART_RUN_STAMP must be letters, digits, - and _ only "
+                         "(for example 20261102-090507)")
     run = Path(out_root).resolve() / f"{tool}-{stamp}"
     run.parent.mkdir(parents=True, exist_ok=True)
     try:

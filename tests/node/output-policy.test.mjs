@@ -76,3 +76,43 @@ test('the frame renderer appends one timing line per run and keeps earlier run f
   for (const f of folders) assert.ok(fs.readdirSync(path.join(outRoot, f)).some((n) => n.endsWith('.png')));
   t.diagnostic(log.join(' / '));
 });
+
+test('a run stamp override that is not a safe token is refused and creates nothing', () => {
+  const root = tmpDir();
+  const old = process.env.CODE_ART_RUN_STAMP;
+  try {
+    for (const bad of ['x/../../../escape', '..', 'a/b', 'a\b', '', 'with space']) {
+      process.env.CODE_ART_RUN_STAMP = bad;
+      if (bad === '') { // empty means "no override": the clock stamp is used
+        assert.ok(createRunFolder('demo', path.join(root, 'out')).startsWith(path.join(root, 'out')));
+        continue;
+      }
+      assert.throws(() => createRunFolder('demo', path.join(root, 'out')), RefusalError, bad);
+    }
+  } finally {
+    if (old === undefined) delete process.env.CODE_ART_RUN_STAMP; else process.env.CODE_ART_RUN_STAMP = old;
+  }
+  assert.ok(!fs.existsSync(path.join(root, 'escape')));
+});
+
+test('still times that round to the same file name keep every still', async () => {
+  const root = tmpDir();
+  const outRoot = path.join(root, 'out');
+  const r = await runScript('render-frames.mjs', ['piece.html', '--root', path.join(here, 'fixtures'),
+    '--stills', '0.5,0.5,0.501,0.502', '--out-root', outRoot]);
+  assert.equal(r.code, 0, r.stdout + r.stderr);
+  const [run] = fs.readdirSync(outRoot).filter((n) => n.startsWith('render-frames-'));
+  const pngs = fs.readdirSync(path.join(outRoot, run)).filter((n) => n.endsWith('.png'));
+  assert.equal(pngs.length, 4, pngs.join(','));
+});
+
+test('a worker count that is not a whole number above zero is refused', async () => {
+  const root = tmpDir();
+  for (const bad of ['bogus', '1.5', '0', '-2']) {
+    const r = await runScript('render-frames.mjs', ['piece.html', '--root', path.join(here, 'fixtures'),
+      '--workers', bad, '--out-root', path.join(root, 'out')]);
+    assert.notEqual(r.code, 0, `--workers ${bad}`);
+    assert.match(r.stderr, /--workers/);
+  }
+  assert.ok(!fs.existsSync(path.join(root, 'out')), 'nothing is created before the option is checked');
+});

@@ -53,6 +53,10 @@ async function main() {
   const stills = opts.stills ? String(opts.stills).split(',').map(Number) : null;
   if (stills && stills.some((t) => !Number.isFinite(t))) throw new Error('--stills takes comma-separated seconds, e.g. 0,1.5,3');
 
+  if (opts.workers !== undefined && !/^[1-9]\d*$/.test(String(opts.workers))) {
+    throw new Error(`--workers takes a whole number above 0, got "${opts.workers}"`);
+  }
+
   // Refuse before any browser starts.
   const explicitOut = opts.out ? path.resolve(opts.out) : null;
   if (explicitOut) refuseIfExists(explicitOut);
@@ -102,11 +106,12 @@ async function main() {
 
     if (stills) {
       const files = [];
-      for (const t of stills) {
+      for (const [k, t] of stills.entries()) {
         await frameOn(page, t, Math.round(t * meta.fps));
-        const label = `t${t.toFixed(2).padStart(6, '0')}`;
+        // The index keeps names unique when times round alike or repeat; nothing is overwritten.
+        const label = `${String(k).padStart(2, '0')}-t${t.toFixed(2).padStart(6, '0')}`;
         const file = path.join(runDir, `${label}.png`);
-        fs.writeFileSync(file, await page.screenshot({ type: 'png', omitBackground: alpha }));
+        fs.writeFileSync(file, await page.screenshot({ type: 'png', omitBackground: alpha }), { flag: 'wx' });
         files.push(file);
         if (textBlocks.length) await cropTextBlocks(file, textBlocks, runDir, label);
       }
@@ -137,7 +142,7 @@ async function main() {
       done.catch(() => {}); // keep an early ffmpeg failure from being an unhandled rejection; it is rethrown at `await done`
       // Frames are pure functions of t, so N pages render interleaved frames in parallel;
       // results are flushed to ffmpeg strictly in order.
-      const nw = Math.max(1, Number(opts.workers || 4));
+      const nw = Number(opts.workers || 4);
       const pages = [page, ...(await Promise.all(Array.from({ length: nw - 1 }, () => openPage(true).then((o) => o.page))))];
       const shoot = (pg) => pg.screenshot(alpha ? { type: 'png', omitBackground: true } : { type: 'jpeg', quality: 95 });
       const ready = new Map();
