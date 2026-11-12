@@ -53,7 +53,7 @@ async function main() {
   const stills = opts.stills ? String(opts.stills).split(',').map(Number) : null;
   if (stills && stills.some((t) => !Number.isFinite(t))) throw new Error('--stills takes comma-separated seconds, e.g. 0,1.5,3');
 
-  if (opts.workers !== undefined && !/^[1-9]\d*$/.test(String(opts.workers))) {
+  if ('workers' in opts && !/^[1-9]\d*$/.test(String(opts.workers))) {
     throw new Error(`--workers takes a whole number above 0, got "${opts.workers}"`);
   }
 

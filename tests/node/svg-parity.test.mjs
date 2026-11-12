@@ -93,3 +93,34 @@ test('a script inside an SVG does not run in the Chromium render and nothing lea
     server.close();
   }
 });
+
+test('inputs whose names differ only by case are refused before anything is rendered', async () => {
+  const dir = tmpDir();
+  fs.mkdirSync(path.join(dir, 'round1')); fs.mkdirSync(path.join(dir, 'final'));
+  fs.copyFileSync(SVG, path.join(dir, 'round1', 'piece.svg'));
+  fs.copyFileSync(SVG, path.join(dir, 'final', 'PIECE.svg'));
+  const out = path.join(dir, 'out');
+  const r = await runScript('svg-parity.mjs', [path.join(dir, 'round1', 'piece.svg'), path.join(dir, 'final', 'PIECE.svg'), '--out-root', out]);
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /same file name/);
+  assert.ok(!fs.existsSync(out));
+});
+
+test('a link inside the SVG folder that points outside it is not served to Chromium', async () => {
+  const { default: sharp } = await import('sharp');
+  const dir = tmpDir();
+  const outside = path.join(dir, 'outside'); const inner = path.join(dir, 'inner');
+  fs.mkdirSync(outside); fs.mkdirSync(inner);
+  await sharp({ create: { width: 64, height: 64, channels: 3, background: '#ff0000' } }).png().toFile(path.join(outside, 'secret.png'));
+  fs.symlinkSync(outside, path.join(inner, 'link'), 'junction');
+  fs.writeFileSync(path.join(inner, 'l.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#fff"/>' +
+    '<image href="link/secret.png" x="0" y="0" width="100" height="100"/></svg>');
+  const out = path.join(dir, 'out');
+  const r = await runScript('svg-parity.mjs', [path.join(inner, 'l.svg'), '--width', '100', '--renderers', 'chromium', '--out-root', out]);
+  assert.equal(r.code, 0, r.stdout + r.stderr);
+  const [run] = fs.readdirSync(out);
+  const { data } = await sharp(path.join(out, run, 'l.chromium.png')).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const o = (50 * 100 + 50) * 3;
+  assert.ok(data[o + 1] > 200, `the outside image was not drawn, green channel ${data[o + 1]}`);
+});

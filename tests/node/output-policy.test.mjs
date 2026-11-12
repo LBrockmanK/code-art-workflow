@@ -116,3 +116,12 @@ test('a worker count that is not a whole number above zero is refused', async ()
   }
   assert.ok(!fs.existsSync(path.join(root, 'out')), 'nothing is created before the option is checked');
 });
+
+test('--workers given with no value is refused before the run folder is created', async () => {
+  const root = tmpDir();
+  const r = await runScript('render-frames.mjs', ['piece.html', '--root', path.join(here, 'fixtures'),
+    `--out-root=${path.join(root, 'out')}`, '--workers']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr, /--workers/);
+  assert.ok(!fs.existsSync(path.join(root, 'out')));
+});

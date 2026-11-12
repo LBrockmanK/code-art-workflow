@@ -68,16 +68,18 @@ async function renderChromium(browser, svgText, out, width, height, time, baseDi
     `<style>body{margin:0;background:#fff}body>svg{display:block!important;width:${width}px!important;height:${height}px!important}</style></head><body>${body}</body></html>`;
   // The page is served from a virtual origin whose files are the SVG's own folder, so images linked beside the SVG load.
   const origin = 'http://svg.local';
-  const root = path.resolve(baseDir);
+  const root = fs.realpathSync(baseDir); // real path: symlinks and junctions are resolved
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) return route.abort();
     const p = decodeURIComponent(url.pathname);
     if (p === '/__page.html') return route.fulfill({ contentType: 'text/html', body: html });
     const file = path.resolve(root, '.' + p);
-    const inside = file.startsWith(root + path.sep);
-    if (!inside || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
-    return route.fulfill({ body: fs.readFileSync(file) });
+    let real;
+    try { real = fs.realpathSync(file); } catch { return route.fulfill({ status: 404, body: '' }); }
+    // Compare real paths, so a link inside the folder that points outside it is refused.
+    if (!real.startsWith(root + path.sep) || fs.statSync(real).isDirectory()) return route.fulfill({ status: 404, body: '' });
+    return route.fulfill({ body: fs.readFileSync(real) });
   });
   await page.goto(`${origin}/__page.html`);
   await page.evaluate(() => document.fonts.ready);
@@ -108,7 +110,8 @@ async function main() {
   for (const f of positional) if (!fs.existsSync(f)) throw new Error(`no such file: ${f}`);
   const names = new Map();
   for (const f of positional) {
-    const n = path.basename(f, path.extname(f));
+    // Case-folded: on a case-insensitive filesystem piece.svg and PIECE.svg name the same artifacts.
+    const n = path.basename(f, path.extname(f)).toLowerCase();
     if (names.has(n)) throw new Error(`refusing to start: ${names.get(n)} and ${f} have the same file name "${n}"; their renders would overwrite each other. Run them one at a time or rename one.`);
     names.set(n, f);
   }
